@@ -129,10 +129,8 @@ def add_funds(request: schemas.AddFundsRequest, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # 1. Update the balance
     user.balance += request.amount
     
-    # 2. Create a transaction record
     new_transaction = models.Transaction(
         user_email=request.email,
         amount=request.amount,
@@ -151,3 +149,26 @@ def add_funds(request: schemas.AddFundsRequest, db: Session = Depends(get_db)):
 @app.get("/wallet/transactions/{email}", response_model=list[schemas.TransactionResponse])
 def get_transactions(email: str, db: Session = Depends(get_db)):
     return db.query(models.Transaction).filter(models.Transaction.user_email == email).order_by(models.Transaction.id.desc()).all()
+
+
+# --- AUTO-CREATE ADMIN USER ON STARTUP (FOR RENDER FREE TIER) ---
+@app.on_event("startup")
+def create_admin_on_startup():
+    db = SessionLocal()
+    try:
+        admin = db.query(models.User).filter(models.User.email == "admin@rawabi.ae").first()
+        if not admin:
+            new_user = models.User(
+                email="admin@rawabi.ae",
+                password="password123",
+                full_name="Iniobong Okon"
+            )
+            db.add(new_user)
+            db.commit()
+            print("✅ Admin user auto-created on startup!")
+        else:
+            print("✅ Admin user already exists.")
+    except Exception as e:
+        print(f"Error creating admin: {e}")
+    finally:
+        db.close()
